@@ -38,7 +38,7 @@ vi.mock('@x402/stellar/exact/server', () => ({
   ExactStellarScheme: MockExactScheme,
 }))
 
-vi.mock('../../x402/metering', () => ({
+vi.mock('../x402/metering', () => ({
   checkQuota: vi.fn(),
   recordUsage: vi.fn(),
   parseCents: vi.fn((price: string) => {
@@ -48,11 +48,11 @@ vi.mock('../../x402/metering', () => ({
   getQuotaConfig: vi.fn(),
 }))
 
-vi.mock('../../redis', () => ({
+vi.mock('../redis', () => ({
   redis: { get: vi.fn(), multi: vi.fn().mockReturnThis(), on: vi.fn() },
 }))
 
-vi.mock('../../db', () => ({
+vi.mock('../db', () => ({
   prisma: {
     apiKey: {
       findUnique: vi.fn(),
@@ -60,8 +60,8 @@ vi.mock('../../db', () => ({
   },
 }))
 
-import { registerX402 } from '../../middleware/x402'
-import { checkQuota, recordUsage, getQuotaConfig } from '../../x402/metering'
+import { registerX402 } from '../middleware/x402'
+import { checkQuota, recordUsage, getQuotaConfig } from '../x402/metering'
 import Fastify from 'fastify'
 
 const mockCheckQuota = checkQuota as any
@@ -85,6 +85,15 @@ async function buildAppWithAuth() {
   process.env.STELLAR_NETWORK = 'testnet'
   process.env.REQUIRE_API_KEY = 'false'
   const app = Fastify({ logger: false })
+  // Simulate the auth layer (src/api/auth.ts) that decorates req.apiKey from the
+  // Bearer token. It runs on onRequest — before x402's preHandler — so quota
+  // enforcement (which is keyed off req.apiKey.id) is actually exercised here.
+  app.decorateRequest('apiKey', undefined)
+  app.addHook('onRequest', async (req) => {
+    if (req.headers['authorization']) {
+      ;(req as any).apiKey = { id: 'key-id' }
+    }
+  })
   await app.register(registerX402)
   app.get('/price/test', async () => ({ ok: true }))
   app.get('/public', async () => ({ ok: true }))
