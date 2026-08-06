@@ -25,6 +25,7 @@ import { registerAdminRoutes } from './api/admin'
 import { registerUsageRoutes } from './api/usage'
 import { registerPriceRoutes } from './routes/price'
 import { registerVolumeRoutes } from './routes/volumes'
+import { registerBenchmarkRoutes } from './routes/benchmark'
 import { registerOracleRoutes } from './routes/oracle'
 import { registerBasketRoutes } from './routes/basket'
 import { fanOutManager } from './ws/fanout'
@@ -105,10 +106,10 @@ async function main() {
 
   // Admin endpoints (key issuance/revocation) — gated by ADMIN_TOKEN. Marked
   // `config.public` so the API-key auth hook skips them.
-   await registerAdminRoutes(app)
-   await registerUsageRoutes(app)
+  await registerAdminRoutes(app)
+  await registerUsageRoutes(app)
 
-   await app.register(registerX402)
+  await app.register(registerX402)
   await registerRESTRoutes(app)
   await registerWebhookRoutes(app)
   await registerCandleRoutes(app)
@@ -117,6 +118,7 @@ async function main() {
   await registerHistoryRoutes(app)
   await registerPriceRoutes(app)
   await registerVolumeRoutes(app)
+  await registerBenchmarkRoutes(app)
   await registerOracleRoutes(app)
   await registerBasketRoutes(app)
   await registerGraphQL(app)
