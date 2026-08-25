@@ -11,7 +11,6 @@ import {
   Contract,
   rpc as SorobanRpc,
   TransactionBuilder,
-  Networks,
   BASE_FEE,
   Keypair,
   scValToNative,
@@ -20,10 +19,10 @@ import {
 } from '@stellar/stellar-sdk'
 import { config } from '../../config'
 
-// Reflector oracle mainnet contract address
-const REFLECTOR_CONTRACT_ID =
-  process.env.REFLECTOR_CONTRACT_ID ??
-  'CCYXZMNHFXHKF3YEX4VJJ5TH3YHCVZIBPNBGM7C4PJIMCIMNNWDOQYA'
+// Reflector oracle contract address — resolved per active network via config.
+// Set REFLECTOR_CONTRACT_ID_TESTNET / REFLECTOR_CONTRACT_ID_MAINNET (or the
+// legacy REFLECTOR_CONTRACT_ID fallback) in your environment.
+const REFLECTOR_CONTRACT_ID = config.oracle.reflectorContractId
 
 // Ephemeral fee payer — simulation only, no real funds needed
 const FEE_PAYER = Keypair.random()
