@@ -27,6 +27,13 @@ vi.mock('@stellar/stellar-sdk', () => {
       }),
       { native: vi.fn(() => 'native') }
     ),
+    // config.ts's buildNetworkConfig() falls back to these when no
+    // NETWORK_PASSPHRASE_* env var is set — needed now that getBestRoute
+    // resolves a per-network Horizon client via getNetworkConfig().
+    Networks: {
+      PUBLIC: 'Public Global Stellar Network ; September 2015',
+      TESTNET: 'Test SDF Network ; September 2015',
+    },
     __mockCall: callFn,
   }
 })
@@ -42,7 +49,11 @@ describe('Price aggregator property tests', () => {
     vi.clearAllMocks()
   })
 
-  it('produces valid route results for random venue prices', async () => {
+  // 10,000 fast-check runs of getBestRoute now actually execute (previously
+  // this test failed before running a single iteration — the mocked
+  // @stellar/stellar-sdk had no Networks export, which getNetworkConfig()
+  // needs); that volume of real work needs more than the 5s default.
+  it('produces valid route results for random venue prices', { timeout: 30000 }, async () => {
     await fc.assert(
       fc.asyncProperty(
         fc.float({ min: 0, max: 2000, noNaN: true, noDefaultInfinity: true, noNegativeZero: true }),

@@ -1,9 +1,25 @@
 import { Horizon, Asset } from '@stellar/stellar-sdk'
-import { config } from '../config'
+import { activeNetwork, getNetworkConfig, type NetworkName } from '../config'
 import type { AssetId, RouteInfo } from '../types'
 import { pgPool } from '../db'
 
-const horizonServer = new Horizon.Server(config.horizon.url)
+// One Horizon client per network, built lazily so a network that's never
+// requested never pays connection setup cost.
+const horizonServers = new Map<NetworkName, Horizon.Server>()
+
+function horizonServerFor(network: NetworkName): Horizon.Server {
+  let server = horizonServers.get(network)
+  if (!server) {
+    server = new Horizon.Server(getNetworkConfig(network).horizon.url)
+    horizonServers.set(network, server)
+  }
+  return server
+}
+
+/** Test-only: clears the memoised per-network Horizon clients between test cases. */
+export function _resetHorizonServers(): void {
+  horizonServers.clear()
+}
 
 function assetIdToStellar(asset: AssetId) {
   if (!asset.issuer) return Asset.native()
@@ -36,11 +52,11 @@ async function getAMMPrice(pairKey: string, amount: number): Promise<number> {
   return output / amount  // price per unit
 }
 
-async function getSDEXPrice(assetA: AssetId, assetB: AssetId, amount: number): Promise<number> {
+async function getSDEXPrice(assetA: AssetId, assetB: AssetId, amount: number, network: NetworkName): Promise<number> {
   try {
     const stellarAssetA = assetIdToStellar(assetA)
     const stellarAssetB = assetIdToStellar(assetB)
-    const paths = await horizonServer
+    const paths = await horizonServerFor(network)
       .strictSendPaths(stellarAssetA, amount.toString(), [stellarAssetB])
       .call()
     if (paths.records.length === 0) return 0
@@ -55,10 +71,14 @@ export async function getBestRoute(
   assetA: AssetId,
   assetB: AssetId,
   pairKey: string,
-  amount: number = 1000
+  amount: number = 1000,
+  // AMM pricing (below) reads price_points/pool_snapshots, which have no
+  // network column yet — that's the deeper aggregation-layer work. SDEX
+  // pricing is a live Horizon call, so it's genuinely per-network today.
+  network: NetworkName = activeNetwork
 ): Promise<RouteInfo> {
   const [sdexPrice, ammPrice] = await Promise.all([
-    getSDEXPrice(assetA, assetB, amount),
+    getSDEXPrice(assetA, assetB, amount, network),
     getAMMPrice(pairKey, amount),
   ])
 
