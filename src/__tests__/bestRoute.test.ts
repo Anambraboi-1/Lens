@@ -25,6 +25,7 @@ vi.mock('@stellar/stellar-sdk', () => {
       vi.fn(function(code, issuer) { return { code, issuer } }),
       { native: vi.fn(() => 'native') }
     ),
+    Networks: { PUBLIC: 'PUBLIC', TESTNET: 'TESTNET' },
     __mockCall: callFn
   }
 })

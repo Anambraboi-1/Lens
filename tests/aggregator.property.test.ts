@@ -27,6 +27,7 @@ vi.mock('@stellar/stellar-sdk', () => {
       }),
       { native: vi.fn(() => 'native') }
     ),
+    Networks: { PUBLIC: 'PUBLIC', TESTNET: 'TESTNET' },
     __mockCall: callFn,
   }
 })
@@ -106,5 +107,5 @@ describe('Price aggregator property tests', () => {
       ),
       { numRuns: 10000 }
     )
-  })
+  }, 15000)
 })

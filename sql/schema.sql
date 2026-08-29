@@ -1,6 +1,7 @@
 -- Raw price points from SDEX trades and AMM swaps
 CREATE TABLE IF NOT EXISTS price_points (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  network TEXT NOT NULL,
   asset_a TEXT NOT NULL,
   asset_b TEXT NOT NULL,
   pair_key TEXT NOT NULL,
@@ -14,13 +15,14 @@ CREATE TABLE IF NOT EXISTS price_points (
   event_id TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_price_points_pair_time ON price_points (pair_key, timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_price_points_pair_source_time ON price_points (pair_key, source, timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_price_points_pool_time ON price_points (pool_id, timestamp DESC) WHERE pool_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_price_points_pair_time ON price_points (network, pair_key, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_price_points_pair_source_time ON price_points (network, pair_key, source, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_price_points_pool_time ON price_points (network, pool_id, timestamp DESC) WHERE pool_id IS NOT NULL;
 
 -- AMM pool reserve snapshots
 CREATE TABLE IF NOT EXISTS pool_snapshots (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  network TEXT NOT NULL,
   pool_id TEXT NOT NULL,
   asset_a TEXT NOT NULL,
   asset_b TEXT NOT NULL,
@@ -33,12 +35,13 @@ CREATE TABLE IF NOT EXISTS pool_snapshots (
   timestamp TIMESTAMPTZ NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_pool_snapshots_pool_time ON pool_snapshots (pool_id, timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_pool_snapshots_assets_time ON pool_snapshots (asset_a, asset_b, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_pool_snapshots_pool_time ON pool_snapshots (network, pool_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_pool_snapshots_assets_time ON pool_snapshots (network, asset_a, asset_b, timestamp DESC);
 
 -- Pre-computed VWAP aggregates
 CREATE TABLE IF NOT EXISTS price_aggregates (
   pair_key TEXT NOT NULL,
+  network TEXT NOT NULL,
   "window" TEXT NOT NULL CHECK ("window" IN ('1m', '5m', '1h', '24h')),
   bucket TIMESTAMPTZ NOT NULL,
   vwap NUMERIC(36, 18) NOT NULL,
@@ -52,7 +55,7 @@ CREATE TABLE IF NOT EXISTS price_aggregates (
   close_price NUMERIC(36, 18),
   high_price NUMERIC(36, 18),
   low_price NUMERIC(36, 18),
-  PRIMARY KEY (pair_key, "window", bucket)
+  PRIMARY KEY (network, pair_key, "window", bucket)
 );
 
 -- 1-minute price snapshot ring buffer.
@@ -61,21 +64,24 @@ CREATE TABLE IF NOT EXISTS price_aggregates (
 -- backtests, audit trails) without paying the cost of scanning raw price_points.
 CREATE TABLE IF NOT EXISTS price_snapshots (
   pair TEXT NOT NULL,
+  network TEXT NOT NULL,
   ts TIMESTAMPTZ NOT NULL,
   price NUMERIC(36, 18) NOT NULL,
   volume NUMERIC(36, 7) NOT NULL DEFAULT 0,
-  PRIMARY KEY (pair, ts)
+  PRIMARY KEY (network, pair, ts)
 );
 
-CREATE INDEX IF NOT EXISTS idx_price_snapshots_pair_ts ON price_snapshots (pair, ts);
+CREATE INDEX IF NOT EXISTS idx_price_snapshots_pair_ts ON price_snapshots (network, pair, ts);
 
 -- Indexer cursor state
 CREATE TABLE IF NOT EXISTS indexer_state (
-  id TEXT PRIMARY KEY,
+  id TEXT NOT NULL,
+  network TEXT NOT NULL,
   last_cursor TEXT,
   last_ledger INTEGER,
   last_processed_at TIMESTAMPTZ,
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (network, id)
 );
 
 -- API keys for authenticated, rate-quota'd access.

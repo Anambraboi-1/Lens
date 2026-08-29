@@ -1,6 +1,6 @@
 import { Horizon } from '@stellar/stellar-sdk'
 import { amm_snapshots_total, trades_ingested_total, last_trade_timestamp } from '../metrics'
-import { config } from '../config'
+import { config, activeNetwork } from '../config'
 import { getActivePairs } from '../pairsRegistry'
 import { upsertPricePoints, getIndexerCursor, setIndexerCursor, prisma } from '../db'
 import { dispatchPriceUpdate } from '../webhookDispatcher'
@@ -52,6 +52,7 @@ export async function snapshotPool(pool: any, pair: WatchedPair): Promise<void> 
 
     await prisma.poolSnapshot.create({
       data: {
+        network: activeNetwork,
         poolId: pool.id,
         assetA: pair.assetA.code,
         assetB: pair.assetB.code,
