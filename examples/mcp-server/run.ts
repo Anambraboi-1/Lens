@@ -7,16 +7,21 @@ import { Keypair } from '@stellar/stellar-sdk';
 
 async function main() {
   const secretKey = process.env.MCP_AGENT_SECRET_KEY || Keypair.random().secret();
-  const network = process.env.MCP_AGENT_NETWORK || 'stellar:testnet';
+  const testnetSigner = createEd25519Signer(secretKey, 'stellar:testnet');
+  const pubnetSigner = createEd25519Signer(secretKey, 'stellar:pubnet');
   
-  const signer = createEd25519Signer(secretKey, network);
-  const client = new ExactStellarScheme(signer);
+  const testnetClient = new ExactStellarScheme(testnetSigner);
+  const pubnetClient = new ExactStellarScheme(pubnetSigner);
   
   const fetchWithPayment = wrapFetchWithPaymentFromConfig(globalThis.fetch, {
     schemes: [
       {
-        network: 'stellar:*',
-        client,
+        network: 'stellar:testnet',
+        client: testnetClient,
+      },
+      {
+        network: 'stellar:pubnet',
+        client: pubnetClient,
       }
     ]
   });
@@ -26,7 +31,7 @@ async function main() {
   });
 
   console.error('[mcp-server] Starting Bazaar MCP server on stdio...');
-  console.error(`[mcp-server] Agent network: ${network}`);
+  console.error('[mcp-server] Agent configured for stellar:testnet and stellar:pubnet');
   
   await server.run();
 }
