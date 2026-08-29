@@ -134,6 +134,51 @@ Identical rationale to [EVM `upto` §Settle-Time Verification][scheme-upto-evm-s
 
 A facilitator that instead enforces `requirements.amount === max_amount` at settle time will reject all partial settlements, breaking the core `upto` value proposition.
 
+## `x402UptoStellar` Contract
+
+Reference behavior (Soroban, Rust):
+
+- `settle_upto(from: Address, to: Address, asset: Address, max_amount: i128, facilitator: Address, nonce: BytesN<32>, expiration_ledger: u32, actual_amount: i128)`
+  - Requires `from`'s authorization on this invocation with the fixed args `(from, to, asset, max_amount, facilitator, nonce, expiration_ledger)` — `actual_amount` is deliberately **not** part of the signed argument set, since it is only known at settle time; this is the Stellar analogue of Permit2's witness/permitted-amount split.
+  - Requires `facilitator.require_auth()`, binding settlement to the designated facilitator.
+  - Fails if `nonce` has already been consumed for `from`.
+  - Fails if `env.ledger().sequence() > expiration_ledger`.
+  - Fails if `actual_amount > max_amount` or `actual_amount < 0`.
+  - On success: calls `token_client.transfer_from(&env.current_contract_address(), &from, &to, &actual_amount)`, marks `nonce` consumed, and emits a `settle` event with `(from, to, asset, actual_amount, nonce)`.
+- Zero settlement (`actual_amount == 0`): the facilitator MAY skip calling `settle_upto` entirely and let the authorization entry expire unused, exactly as EVM's zero-settlement case — no on-chain transaction, no gas cost, the nonce is simply never consumed. If the resource server needs an on-chain record of the zero-charge decision, the facilitator MAY still call `settle_upto` with `actual_amount = 0` to consume the nonce and close out the authorization explicitly.
+
+## Composition with Smart Account Spending Policies
+
+The `x402UptoStellar` contract enforces guarantees about a *single authorization*: it cannot be settled twice, cannot exceed its signed ceiling, and cannot be redirected to a different recipient. It says nothing about how many such authorizations a given signer is allowed to produce in total — that is a separate concern, and on Stellar it is naturally handled one layer up, at the smart account (C-account) level, rather than inside the x402 contract itself.
+
+For an agentic payer whose Stellar account is a smart wallet (e.g. a passkey-backed contract account exposing its own `approve(spender, token, amount, expiry)` policy independent of the underlying SEP-41 token allowance), the composition looks like this:
+
+- The **x402 `upto` authorization** (this spec) bounds a single request: at most `max_amount`, to exactly `payTo`, settleable at most once.
+- The **smart account's own spending policy** bounds the agent's signing key across *all* requests: it governs whether the wallet will co-sign an `approve` or `settle_upto` authorization entry for a given `(spender, token)` pair at all, independent of what any individual x402 authorization says.
+
+These two layers are enforced at different points and do not need to agree on mechanism: the smart account's policy check happens client-side, when the wallet decides whether to produce a signature for the agent's requested authorization entry; the `x402UptoStellar` contract's checks happen on-chain, at settle time, regardless of what kind of account `from` is. An agent authorized up to a per-request cap by `upto`, running against a smart wallet with its own aggregate spending policy, is bounded by both: the smart wallet refuses to keep signing once its own policy limit is reached, even if individual `upto` ceilings would otherwise permit more spend. This is a recommended defense-in-depth pattern for agent use cases, not a protocol requirement — `upto` on Stellar functions identically for a plain G-account payer with no wallet-level policy at all.
+
+## Out of Scope
+
+- **`batch-settlement`**: settling more than once against the same authorization (streaming/pay-per-chunk) is explicitly out of scope for `upto`, per the [core spec][scheme-upto]. Nothing in `x402UptoStellar`'s nonce design forecloses a future `batch-settlement` scheme built on the same escrow/voucher primitives used elsewhere in the ecosystem — that would be a distinct scheme with its own spec.
+- **`auth-capture`**: deferred; the single-settlement nonce model here does not preclude a future two-phase design.
+
+## Error Codes
+
+In addition to the standard x402 error codes:
+
+- **`invalid_upto_stellar_payload_settlement_exceeds_amount`**: attempted settlement amount exceeds the signed `max_amount`.
+- **`invalid_upto_stellar_payload_nonce_consumed`**: the authorization entry's nonce has already been settled.
+- **`invalid_upto_stellar_payload_allowance_required`**: the client has not approved `x402UptoStellar` for at least `max_amount` (see [Allowance Precondition](#6-allowance-precondition)).
+
+## Security Considerations
+
+1. **Maximum amount authorization**: as in EVM/SVM, clients should sign `max_amount` conservatively; the facilitator can settle for any amount up to it.
+2. **Server trust**: `upto` requires trusting the resource server to report actual usage honestly; this is unchanged from the core scheme.
+3. **Allowance ceiling vs per-request ceiling**: the SEP-41 `approve` ceiling and the per-request `max_amount` are independent. Implementations SHOULD keep the allowance close to the expected per-request ceiling and re-approve as needed, rather than approving a large standing balance, to limit exposure if a facilitator or the escrow contract is ever compromised.
+4. **Nonce exhaustion / griefing**: because settlement is optional (zero-settlement need not touch the chain), a malicious client cannot force facilitator gas spend by signing many unused authorizations; only the facilitator's own `/settle` calls cost gas, and it only calls them for its own resource server's confirmed usage.
+5. **Smart account composition**: see [Composition with Smart Account Spending Policies](#composition-with-smart-account-spending-policies) — this is an additive, optional safeguard and its absence does not weaken the guarantees this spec makes about a single authorization.
+
 [SEP-41]: https://stellar.org/protocol/sep-41
 [scheme-exact-stellar]: https://github.com/x402-foundation/x402/blob/main/specs/schemes/exact/scheme_exact_stellar.md
 [scheme-upto]: https://github.com/x402-foundation/x402/blob/main/specs/schemes/upto/scheme_upto.md
