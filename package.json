@@ -15,6 +15,7 @@
     "oracle:relay": "tsx examples/oracle-relay/relay.ts",
     "alert:bot": "tsx examples/alert-bot/alert-bot.ts",
     "mcp:server": "tsx examples/mcp-server/run.ts",
+    "mcp:agent": "tsx examples/mcp-server/agent.ts",
     "key:issue": "tsx scripts/issue-api-key.ts",
     "db:push": "prisma db push",
     "db:generate": "prisma generate"
