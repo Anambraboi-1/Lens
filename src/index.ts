@@ -28,6 +28,7 @@ import { registerVolumeRoutes } from './routes/volumes'
 import { registerBenchmarkRoutes } from './routes/benchmark'
 import { registerOracleRoutes } from './routes/oracle'
 import { registerBasketRoutes } from './routes/basket'
+import { registerDiscoveryRoutes } from './routes/discovery'
 import { fanOutManager } from './ws/fanout'
 
 import { startSDEXIngester } from './ingesters/sdex'
@@ -121,6 +122,7 @@ async function main() {
   await registerBenchmarkRoutes(app)
   await registerOracleRoutes(app)
   await registerBasketRoutes(app)
+  await registerDiscoveryRoutes(app)
   await registerGraphQL(app)
   await registerWebSocket(app)
 
