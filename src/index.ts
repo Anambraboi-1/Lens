@@ -23,6 +23,7 @@ import { registerWebSocket } from './api/websocket'
 import { registerApiKeyAuth } from './api/auth'
 import { registerAdminRoutes } from './api/admin'
 import { registerUsageRoutes } from './api/usage'
+import { registerFacilitatorRoutes } from './api/facilitator'
 import { registerPriceRoutes } from './routes/price'
 import { registerVolumeRoutes } from './routes/volumes'
 import { registerBenchmarkRoutes } from './routes/benchmark'
@@ -108,6 +109,7 @@ async function main() {
   // `config.public` so the API-key auth hook skips them.
   await registerAdminRoutes(app)
   await registerUsageRoutes(app)
+  await app.register(registerFacilitatorRoutes)
 
   await app.register(registerX402)
   await registerRESTRoutes(app)
