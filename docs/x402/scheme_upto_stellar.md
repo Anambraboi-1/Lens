@@ -50,6 +50,90 @@ The `x402UptoStellar` contract is intentionally thin: it does not escrow the cli
 8. **Contract** checks the nonce has not been used, `now <= expiration_ledger`, `facilitator.require_auth()` matches the signed `facilitator`, and `actual_amount <= max_amount`; it then calls `token.transfer_from(spender: self, from, to, actual_amount)` and marks the nonce consumed.
 9. **Facilitator** submits the transaction, sponsoring fees as in `exact`, and returns a `SettlementResponse` to the **Resource Server**, which grants access to the **Client**.
 
+## `PaymentRequirements` for `upto`
+
+```json
+{
+  "scheme": "upto",
+  "network": "stellar:testnet",
+  "amount": "10000000",
+  "asset": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+  "payTo": "GBHEGW3KWOY2OFH767EDALFGCUTBOEVBDQMCKU4APMDLQNBW5QV3W3KO",
+  "maxTimeoutSeconds": 300,
+  "extra": {
+    "areFeesSponsored": true,
+    "uptoContract": "CA...UPTOSTELLARCONTRACTADDRESS",
+    "facilitatorAddress": "GBFACILITATOR..."
+  }
+}
+```
+
+**Field Definitions:**
+
+- `amount`: Phase-dependent per the [`upto` core spec][scheme-upto] — the authorized maximum at verification time, the actual settlement amount at settlement time.
+- `extra.uptoContract`: The deployed `x402UptoStellar` contract address the client must authorize against.
+- `extra.facilitatorAddress`: The facilitator the client binds into the signed authorization (mirrors EVM's `witness.facilitator`); prevents settlement by any other party.
+- `extra.areFeesSponsored`: As in `exact` — currently always `true`.
+
+## PaymentPayload `payload` Field
+
+```json
+{
+  "authEntry": "AAAAAgAAAABriIN4poutFUmHfB6FbFJu8GgXoPPTGQWREqFpPfvO1AAAAAAAAAAAAAAAAAAAAA...",
+  "nonce": "3f1a...b2",
+  "maxAmount": "10000000"
+}
+```
+
+- `authEntry`: Base64-encoded XDR of the signed Soroban authorization entry for `settle_upto`.
+- `nonce`: The 32-byte nonce bound into the authorization entry, surfaced separately so the facilitator can perform a fast pre-check without decoding XDR.
+- `maxAmount`: The signed ceiling, echoed outside the XDR for the same reason.
+
+## Facilitator Verification Rules (MUST)
+
+### 1. Protocol Validation
+
+Same as `exact` on Stellar: `x402Version` MUST be `2`, `scheme` MUST be `"upto"` on both sides, `network` MUST match.
+
+### 2. Authorization Entry Structure
+
+- The authorization entry MUST target the `x402UptoStellar` contract at `extra.uptoContract` and the `settle_upto` function.
+- Arguments MUST be exactly `(from, to, asset, max_amount, facilitator, nonce, expiration_ledger)`.
+- `to` MUST equal `requirements.payTo` exactly.
+- `asset` MUST equal `requirements.asset` exactly.
+- `facilitator` MUST equal `extra.facilitatorAddress` exactly.
+- Credential type MUST be `sorobanCredentialsAddress`, matching `exact`.
+
+### 3. Cap and Amount Rules
+
+- At **verify** time: `requirements.amount` (the authorized maximum) MUST equal the signed `max_amount`.
+- At **settle** time: `requirements.amount` (the actual settlement amount) MUST be `<= max_amount` from the signed entry. The facilitator MUST re-verify the authorization entry's signature against `max_amount`, never against the settlement-time amount — see [Settle-Time Verification](#settle-time-verification).
+- The settled amount MAY be `0`.
+
+### 4. Time Bounds and Replay
+
+- `expiration_ledger` MUST NOT exceed `currentLedger + ceil(maxTimeoutSeconds / estimatedLedgerSeconds)` (fallback `5` seconds/ledger, as in `exact`).
+- The facilitator MUST query the contract's nonce state (or simulate `settle_upto`) before submitting, to short-circuit already-consumed nonces.
+- The contract itself is the source of truth for replay protection: `settle_upto` MUST fail if `nonce` has already been marked consumed.
+
+### 5. 🚨🚨🚨 Facilitator Safety
+
+Same as `exact` §4: the facilitator's own address MUST NOT be `from`, MUST NOT appear as an unexpected signer, and simulation MUST show only the expected balance change (`from` decrease of `actual_amount`, `to` increase of `actual_amount`) plus no other balance changes.
+
+### 6. Allowance Precondition
+
+- Before verification can succeed, the facilitator MUST confirm `token.allowance(from, uptoContract) >= max_amount` and unexpired. If insufficient, the facilitator MUST return `412 Precondition Failed` with an error code equivalent to EVM's `PERMIT2_ALLOWANCE_REQUIRED`, signaling the client to submit the one-time `approve` first.
+
+## Settle-Time Verification
+
+Identical rationale to [EVM `upto` §Settle-Time Verification][scheme-upto-evm-settle]: because `amount` is phase-dependent, the facilitator MUST:
+
+1. Verify the authorization entry's signature against the signed `max_amount` (the ceiling), not `requirements.amount` (the actual settlement amount) — the client signed for the ceiling, and comparing against the metered amount would reject every partial settlement.
+2. Validate `requirements.amount <= max_amount`.
+3. Call `settle_upto` with `actual_amount = requirements.amount`.
+
+A facilitator that instead enforces `requirements.amount === max_amount` at settle time will reject all partial settlements, breaking the core `upto` value proposition.
+
 [SEP-41]: https://stellar.org/protocol/sep-41
 [scheme-exact-stellar]: https://github.com/x402-foundation/x402/blob/main/specs/schemes/exact/scheme_exact_stellar.md
 [scheme-upto]: https://github.com/x402-foundation/x402/blob/main/specs/schemes/upto/scheme_upto.md
