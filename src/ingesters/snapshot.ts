@@ -1,4 +1,5 @@
 import { pgPool } from '../db'
+import { activeNetwork } from '../config'
 import { getActivePairs } from '../pairsRegistry'
 import { price_snapshots_total } from '../metrics'
 
@@ -36,23 +37,23 @@ export async function appendSnapshots(now: Date = new Date()): Promise<number> {
     `WITH latest AS (
        SELECT DISTINCT ON (pair_key) pair_key, price::numeric AS price
        FROM price_points
-       WHERE pair_key = ANY($1)
+       WHERE pair_key = ANY($1) AND network = $3
        ORDER BY pair_key, timestamp DESC
      ),
      vol AS (
        SELECT pair_key, SUM(base_volume::numeric) AS volume
        FROM price_points
-       WHERE pair_key = ANY($1)
+       WHERE pair_key = ANY($1) AND network = $3
          AND timestamp >= $2
          AND timestamp < $2 + INTERVAL '1 minute'
        GROUP BY pair_key
      )
-     INSERT INTO price_snapshots (pair, ts, price, volume)
-     SELECT l.pair_key, $2, l.price, COALESCE(v.volume, 0)
+     INSERT INTO price_snapshots (network, pair, ts, price, volume)
+     SELECT $3, l.pair_key, $2, l.price, COALESCE(v.volume, 0)
      FROM latest l
      LEFT JOIN vol v ON v.pair_key = l.pair_key
-     ON CONFLICT (pair, ts) DO NOTHING`,
-    [pairKeys, ts]
+     ON CONFLICT (network, pair, ts) DO NOTHING`,
+    [pairKeys, ts, activeNetwork]
   )
 
   const inserted = result.rowCount ?? 0
