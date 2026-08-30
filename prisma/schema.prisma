@@ -11,7 +11,7 @@ datasource db {
 
 model PricePoint {
   id            String   @default(uuid())
-  network       String
+  network       String   @default("testnet")
   assetA        String   @map("asset_a")
   assetB        String   @map("asset_b")
   pairKey       String   @map("pair_key")
@@ -32,7 +32,7 @@ model PricePoint {
 
 model PoolSnapshot {
   id          String   @default(uuid())
-  network     String
+  network     String   @default("testnet")
   poolId      String   @map("pool_id")
   assetA      String   @map("asset_a")
   assetB      String   @map("asset_b")
@@ -51,7 +51,7 @@ model PoolSnapshot {
 
 model PriceAggregate {
   pairKey     String   @map("pair_key")
-  network     String
+  network     String   @default("testnet")
   window      String
   bucket      DateTime
   vwap        Decimal  @db.Decimal(36, 18)
@@ -72,7 +72,7 @@ model PriceAggregate {
 
 model PriceSnapshot {
   pair   String
-  network String
+  network String   @default("testnet")
   ts     DateTime
   price  Decimal  @db.Decimal(36, 18)
   volume Decimal  @default(0) @db.Decimal(36, 7)
@@ -84,7 +84,7 @@ model PriceSnapshot {
 
 model IndexerState {
   id              String
-  network         String
+  network         String   @default("testnet")
   lastCursor      String?   @map("last_cursor")
   lastLedger      Int?      @map("last_ledger")
   lastProcessedAt DateTime? @map("last_processed_at")
@@ -96,7 +96,7 @@ model IndexerState {
 
 model PairConfig {
   pairKey   String   @map("pair_key")
-  network   String
+  network   String   @default("testnet")
   assetACode   String   @map("asset_a_code")
   assetAIssuer String?  @map("asset_a_issuer")
   assetBCode   String   @map("asset_b_code")
@@ -109,7 +109,7 @@ model PairConfig {
 
 model Webhook {
   id        String   @id @default(uuid())
-  network   String
+  network   String   @default("testnet")
   url       String
   assetA    String   @map("asset_a")
   assetB    String   @map("asset_b")
