@@ -44,6 +44,8 @@ export interface ReflectorPrice {
  * Returns null when the contract is unreachable or the asset is unknown.
  */
 export async function fetchReflectorPrice(assetCode: string): Promise<ReflectorPrice | null> {
+  if (!config.oracle.enabled) return null
+
   try {
     const rpc = getRpc()
     const contract = new Contract(REFLECTOR_CONTRACT_ID)
