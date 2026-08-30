@@ -83,6 +83,7 @@ async function facilitatorPlugin(app: FastifyInstance) {
       req.log.error(err, 'Verification failed internally')
       return reply.status(500).send({
         isValid: false,
+        invalidReason: 'internal_error',
         invalidMessage: 'Internal server error during verification'
       })
     }
@@ -122,6 +123,7 @@ async function facilitatorPlugin(app: FastifyInstance) {
       req.log.error(err, 'Settlement failed internally')
       return reply.status(500).send({
         success: false,
+        errorReason: 'internal_error',
         errorMessage: 'Internal server error during settlement'
       })
     }
