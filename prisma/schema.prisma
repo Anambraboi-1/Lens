@@ -99,6 +99,98 @@ model PairConfig {
   @@map("pair_configs")
 }
 
+/// A single x402-discoverable resource in the Bazaar catalog — either an
+/// HTTP endpoint or an MCP tool, per the x402 `bazaar` extension
+/// (specs/extensions/bazaar.md in x402-foundation/x402).
+///
+/// HTTP and MCP resources share one table (discriminated by `type`) rather
+/// than two, because a discovery listing is fundamentally "a resource with
+/// payment requirements and a bazaar.info blob" regardless of transport —
+/// splitting them would require the discovery query to UNION two tables on
+/// every filter combination for no benefit, since the two types are never
+/// looked up via different access patterns.
+model BazaarResource {
+  id String @id @default(uuid())
+
+  /// "http" | "mcp" — discriminates which of the two input shapes below applies.
+  type String
+
+  /// Which Stellar network this listing settles on ("mainnet" | "testnet").
+  /// Mirrors config.ts's NetworkName so a listing is never ambiguous about
+  /// which network's payTo/asset it refers to.
+  network String
+
+  /// The protected resource URL (`resource.url` in the spec). For MCP this is
+  /// the MCP server endpoint, not the tool itself — the tool is disambiguated
+  /// by `mcpToolName` below.
+  url String
+
+  /// `resource.description` — human-readable description of the resource.
+  description String?
+
+  /// `resource.mimeType`.
+  mimeType String? @map("mime_type")
+
+  /// Optional service metadata the spec allows on `resource`.
+  serviceName String?  @map("service_name")
+  tags        String[] @default([])
+  iconUrl     String?  @map("icon_url")
+
+  /// MCP tool identifier (`input.toolName`). Null for HTTP resources.
+  /// Per the spec, MCP resources are keyed on the TUPLE of (resource.url,
+  /// input.toolName) since multiple tools multiplex over one server endpoint.
+  /// We additionally scope that tuple by `network` (see @@unique below) —
+  /// a deliberate deviation, called out in the PR: since Lens is
+  /// dual-network, the same (url, toolName) pair can legitimately exist
+  /// once per network with a different payTo/asset in `accepts`, and the
+  /// spec's tuple alone can't express that without collapsing them.
+  mcpToolName String? @map("mcp_tool_name")
+
+  /// HTTP method for HTTP resources (GET/POST/...). Null for MCP resources.
+  httpMethod String? @map("http_method")
+
+  /// Full `accepts[]` payment requirements array (scheme/network/amount/asset/
+  /// payTo/maxTimeoutSeconds/extra), stored verbatim so the discovery response
+  /// can round-trip the exact PaymentRequirements the resource advertised.
+  accepts Json
+
+  /// The `payTo` address extracted from accepts[0] for indexed filtering.
+  /// Denormalized on write because Postgres cannot efficiently index into a
+  /// JSON array element without a functional/GIN index per accepted scheme,
+  /// and payTo is the one field the spec calls out as a top-level filter.
+  payTo String @map("pay_to")
+
+  /// `extensions.bazaar.info` — discovery metadata (input type, params, output).
+  bazaarInfo Json @map("bazaar_info")
+
+  /// `extensions.bazaar.schema` — JSON Schema validating `bazaarInfo`.
+  bazaarSchema Json @map("bazaar_schema")
+
+  /// `extensions.bazaar.routeTemplate` — canonical `:param` pattern for
+  /// dynamic HTTP routes, used by the facilitator to consolidate listings.
+  routeTemplate String? @map("route_template")
+
+  /// Any other declared extension keys beyond "bazaar" (spec's `extensions`
+  /// filter matches on presence of a key here, "bazaar" always included).
+  extensionKeys String[] @default(["bazaar"]) @map("extension_keys")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  // HTTP resources are keyed on (network, url, httpMethod); MCP resources are
+  // keyed on (network, url, mcpToolName) per the spec's tuple. Postgres
+  // treats NULLs as distinct in a unique index, so these two constraints
+  // don't collide with each other for a row that only populates one side.
+  @@unique([network, url, httpMethod], name: "bazaarHttpIdentity", map: "bazaar_http_identity")
+  @@unique([network, url, mcpToolName], name: "bazaarMcpIdentity", map: "bazaar_mcp_identity")
+  // Covers the six spec filters (type, payTo, network, extensions via
+  // extensionKeys, plus limit/offset) and keeps pagination stable — see
+  // routes/discovery.ts, which always orders by (createdAt, id).
+  @@index([network, type, payTo, createdAt(sort: Desc), id])
+  @@index([extensionKeys], type: Gin)
+  @@map("bazaar_resources")
+}
+
 model Webhook {
   id        String   @id @default(uuid())
   url       String

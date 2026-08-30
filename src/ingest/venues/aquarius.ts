@@ -14,8 +14,6 @@ import { upsertPricePoints } from '../../db'
 import { dispatchPriceUpdate } from '../../webhookDispatcher'
 import type { WatchedPair } from '../../types'
 
-const AQUARIUS_AMM_API = 'https://amm.aquarius.network/api/v1/pools/'
-
 const lastPrice = new Map<string, number>()
 
 interface AquariusPool {
@@ -28,7 +26,10 @@ interface AquariusListResponse {
   results?: AquariusPool[]
 }
 
-export async function fetchAquariusPools(pair: WatchedPair): Promise<AquariusPool[]> {
+export async function fetchAquariusPools(
+  pair: WatchedPair,
+  apiUrl: string = config.aquarius.apiUrl
+): Promise<AquariusPool[]> {
   try {
     const assetAStr = pair.assetA.issuer
       ? `${pair.assetA.code}:${pair.assetA.issuer}`
@@ -41,7 +42,7 @@ export async function fetchAquariusPools(pair: WatchedPair): Promise<AquariusPoo
     params.append('assets[]', assetAStr)
     params.append('assets[]', assetBStr)
 
-    const res = await fetch(`${AQUARIUS_AMM_API}?${params.toString()}`)
+    const res = await fetch(`${apiUrl}?${params.toString()}`)
     if (!res.ok) return []
     const data = await res.json() as AquariusListResponse
     return data.results ?? []
@@ -98,6 +99,11 @@ async function sleep(ms: number) {
 }
 
 export async function startAquariusIngester(): Promise<void> {
+  if (!config.aquarius.enabled) {
+    console.log('[aquarius] Aquarius is disabled on this network — ingester not started')
+    return
+  }
+
   console.log(`[aquarius] Starting Aquarius AMM ingester for ${getActivePairs().length} pairs`)
   while (true) {
     for (const pair of getActivePairs()) {
