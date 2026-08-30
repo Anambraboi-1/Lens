@@ -1,31 +1,17 @@
-import { Horizon, Asset } from '@stellar/stellar-sdk'
-import { activeNetwork, getNetworkConfig, type NetworkName } from '../config'
+import { Asset } from '@stellar/stellar-sdk'
+import { activeNetwork, type NetworkName } from '../config'
+import { getHorizonServer, resetNetworkClients } from '../network/clients'
 import type { AssetId, RouteInfo } from '../types'
 import { pgPool } from '../db'
-
-// One Horizon client per network, built lazily so a network that's never
-// requested never pays connection setup cost.
-const horizonServers = new Map<NetworkName, Horizon.Server>()
-
-function horizonServerFor(network: NetworkName): Horizon.Server {
-  let server = horizonServers.get(network)
-  if (!server) {
-    server = new Horizon.Server(getNetworkConfig(network).horizon.url)
-    horizonServers.set(network, server)
-  }
-  return server
-}
-
-/** Test-only: clears the memoised per-network Horizon clients between test cases. */
-export function _resetHorizonServers(): void {
-  horizonServers.clear()
-}
 
 function assetIdToStellar(asset: AssetId) {
   if (!asset.issuer) return Asset.native()
   return new Asset(asset.code, asset.issuer)
 }
 
+// AMM pricing reads price_points/pool_snapshots, which have no network column
+// yet — that is the deeper aggregation-layer work tracked separately. SDEX
+// pricing is a live Horizon call, so it is genuinely per-network today.
 async function getAMMPrice(pairKey: string, amount: number): Promise<number> {
   // Get latest pool snapshot via pool_id (pairKey indexes price_points correctly)
   const result = await pgPool.query(
@@ -52,11 +38,25 @@ async function getAMMPrice(pairKey: string, amount: number): Promise<number> {
   return output / amount  // price per unit
 }
 
-async function getSDEXPrice(assetA: AssetId, assetB: AssetId, amount: number, network: NetworkName): Promise<number> {
+/**
+ * Test-only: clears the memoised per-network Horizon clients between cases.
+ * Kept as a re-export so existing tests keep their import path; the clients
+ * themselves now live in network/clients.ts.
+ */
+export function _resetHorizonServers(): void {
+  resetNetworkClients()
+}
+
+async function getSDEXPrice(
+  assetA: AssetId,
+  assetB: AssetId,
+  amount: number,
+  network: NetworkName
+): Promise<number> {
   try {
     const stellarAssetA = assetIdToStellar(assetA)
     const stellarAssetB = assetIdToStellar(assetB)
-    const paths = await horizonServerFor(network)
+    const paths = await getHorizonServer(network)
       .strictSendPaths(stellarAssetA, amount.toString(), [stellarAssetB])
       .call()
     if (paths.records.length === 0) return 0
@@ -72,9 +72,6 @@ export async function getBestRoute(
   assetB: AssetId,
   pairKey: string,
   amount: number = 1000,
-  // AMM pricing (below) reads price_points/pool_snapshots, which have no
-  // network column yet — that's the deeper aggregation-layer work. SDEX
-  // pricing is a live Horizon call, so it's genuinely per-network today.
   network: NetworkName = activeNetwork
 ): Promise<RouteInfo> {
   const [sdexPrice, ammPrice] = await Promise.all([
