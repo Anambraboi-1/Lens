@@ -6,14 +6,22 @@ import { createEd25519Signer } from '@x402/stellar';
 import { Keypair } from '@stellar/stellar-sdk';
 
 async function main() {
-  const secretKey = process.env.MCP_AGENT_SECRET_KEY || Keypair.random().secret();
-  const testnetSigner = createEd25519Signer(secretKey, 'stellar:testnet');
-  const pubnetSigner = createEd25519Signer(secretKey, 'stellar:pubnet');
+  const testnetKey = process.env.MCP_AGENT_SECRET_KEY_TESTNET;
+  const mainnetKey = process.env.MCP_AGENT_SECRET_KEY_MAINNET;
+  
+  if (!testnetKey || !mainnetKey) {
+    console.error('[mcp-server] Error: MCP_AGENT_SECRET_KEY_TESTNET and MCP_AGENT_SECRET_KEY_MAINNET must be set');
+    process.exit(1);
+  }
+
+  const testnetSigner = createEd25519Signer(testnetKey, 'stellar:testnet');
+  const pubnetSigner = createEd25519Signer(mainnetKey, 'stellar:pubnet');
   
   const testnetClient = new ExactStellarScheme(testnetSigner);
   const pubnetClient = new ExactStellarScheme(pubnetSigner);
   
   const fetchWithPayment = wrapFetchWithPaymentFromConfig(globalThis.fetch, {
+    maxPrice: process.env.MCP_MAX_PAYMENT_PRICE || '$1.00',
     schemes: [
       {
         network: 'stellar:testnet',
