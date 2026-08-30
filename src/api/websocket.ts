@@ -1,9 +1,9 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import websocket from '@fastify/websocket'
 import { priceEmitter, PRICE_UPDATE, PriceUpdateEvent } from '../events'
-// @ts-ignore
+// @ts-expect-error
 import { x402ResourceServer, HTTPFacilitatorClient } from '@x402/core/server'
-// @ts-ignore
+// @ts-expect-error
 import { ExactStellarScheme } from '@x402/stellar/exact/server'
 import { fanOutManager } from '../ws/fanout'
 import { v4 as uuid } from 'uuid'

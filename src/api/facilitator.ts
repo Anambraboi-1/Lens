@@ -1,8 +1,8 @@
 import fp from 'fastify-plugin'
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
-// @ts-ignore
+// @ts-expect-error
 import { x402Facilitator } from '@x402/core/facilitator'
-// @ts-ignore
+// @ts-expect-error
 import { ExactStellarScheme } from '@x402/stellar/exact/facilitator'
 import { createEd25519Signer } from '@x402/stellar'
 import { getNetworkConfig } from '../config'
@@ -80,10 +80,10 @@ async function facilitatorPlugin(app: FastifyInstance) {
         return reply.status(err.statusCode || 400).send(err.response)
       }
       
-      return reply.status(400).send({
+      req.log.error(err, 'Verification failed internally')
+      return reply.status(500).send({
         isValid: false,
-        invalidReason: 'internal_error',
-        invalidMessage: err.message || 'Verification failed'
+        invalidMessage: 'Internal server error during verification'
       })
     }
   })
@@ -119,10 +119,10 @@ async function facilitatorPlugin(app: FastifyInstance) {
       if (err && typeof err === 'object' && err.response && 'success' in err.response) {
         return reply.status(err.statusCode || 400).send(err.response)
       }
-      return reply.status(400).send({
+      req.log.error(err, 'Settlement failed internally')
+      return reply.status(500).send({
         success: false,
-        errorReason: 'internal_error',
-        errorMessage: err.message || 'Settlement failed'
+        errorMessage: 'Internal server error during settlement'
       })
     }
   })

@@ -2,9 +2,9 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { x402_payments_received_total } from '../metrics'
 import { checkQuota, recordUsage, parseCents, getQuotaConfig } from '../x402/metering'
 import fp from 'fastify-plugin'
-// @ts-ignore — @x402 packages ship ESM-only types incompatible with commonjs moduleResolution
+// @ts-expect-error — @x402 packages ship ESM-only types incompatible with commonjs moduleResolution
 import { x402ResourceServer, HTTPFacilitatorClient } from '@x402/core/server'
-// @ts-ignore
+// @ts-expect-error
 import { ExactStellarScheme } from '@x402/stellar/exact/server'
 
 // Routes gated by x402 and their prices
