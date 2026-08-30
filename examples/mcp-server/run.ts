@@ -3,7 +3,6 @@ import { BazaarMcpServer } from '../../src/mcp/server';
 import { wrapFetchWithPaymentFromConfig } from '@x402/fetch';
 import { ExactStellarScheme } from '@x402/stellar/exact/client';
 import { createEd25519Signer } from '@x402/stellar';
-import { Keypair } from '@stellar/stellar-sdk';
 
 async function main() {
   const testnetKey = process.env.MCP_AGENT_SECRET_KEY_TESTNET;
