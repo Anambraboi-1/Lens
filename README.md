@@ -21,6 +21,7 @@ Aggregates price data from Stellar's Classic Order Book (SDEX) and AMM Liquidity
 | GET | `/pools` | Active AMM pools being watched |
 | GET | `/pairs` | Watched trading pairs |
 | GET | `/status` | Indexer health |
+| GET | `/discovery/resources?type=&payTo=&network=&extensions=&limit=&offset=` | Bazaar catalog of x402-discoverable resources (spec: [`bazaar`](https://github.com/x402-foundation/x402/blob/main/specs/extensions/bazaar.md)) |
 
 Every route accepts an optional `?network=testnet\|mainnet` query param (or
 `x-network` header) to pick the Stellar network — default is `testnet`. An
